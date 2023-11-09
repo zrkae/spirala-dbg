@@ -1,0 +1,3 @@
+[submodule "3rdparty/zep"]
+	path = 3rdparty/zep
+	url = git@github.com:zrkae/zep.git
