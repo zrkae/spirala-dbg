@@ -229,6 +229,15 @@ const std::vector<Command> CommandTable = {
             }
         }
     },
+    { .keywords = { "symbols", "sym" }, .description = "show symbols present in the executable (globals, functions)",
+        .callback = [](Tracee& tracee,  std::string_view) {
+            for (const auto& sym : tracee.elf.symbols()) {
+                auto str_name = sym.str_name(tracee.elf);
+                if (str_name && !str_name.value().empty())
+                    std::cout << *str_name << "\n";
+            }
+        }
+    },
 };
 
 // interpret user command

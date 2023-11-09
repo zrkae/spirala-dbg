@@ -48,8 +48,8 @@ std::optional<Register> from_offset(uint64_t offset)
 
 } // namespace reg
 
-Tracee::Tracee(std::string_view path) 
-    :m_path(path), m_elf(path)
+Tracee::Tracee(const std::string& path) 
+    :elf(path), m_path(path)
 {
     std::cout << std::format("Loaded executable '{}'!\n", path);
 }

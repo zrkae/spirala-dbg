@@ -97,12 +97,13 @@ public:
 
     const BreakPointMap_t& breakpoints();
     void breakpoint_add(intptr_t addr);
+
+    elf::Elf elf;
 private:
     void waitsig();
     void cleanup();
 
     std::string m_path;
-    elf::Elf m_elf;
 
     pid_t m_pid = 0;
     int m_wstatus;
