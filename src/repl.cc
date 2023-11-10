@@ -9,6 +9,8 @@
 #include <linenoise.h>
 #include <sys/user.h>
 
+#include "disassembly.hpp"
+
 namespace repl {
 
 namespace utils {
@@ -234,8 +236,30 @@ const std::vector<Command> CommandTable = {
             for (const auto& sym : tracee.elf.symbols()) {
                 auto str_name = sym.str_name(tracee.elf);
                 if (str_name && !str_name.value().empty())
-                    std::cout << *str_name << "\n";
+                    std::cout << std::format("{:x}\t{}\n", sym.value, *str_name);
             }
+        }
+    },
+    { .keywords = { "functions", "func" }, .description = "show exported function symbols",
+        .callback = [](Tracee& tracee,  std::string_view) {
+            for (const auto& sym : tracee.elf.symbols()) {
+                if (sym.type() != elf::SymbolType::STT_FUNC)
+                    continue;
+                auto str_name = sym.str_name(tracee.elf);
+                if (str_name && !str_name.value().empty())
+                    std::cout << std::format("{:x}\t{}\n", sym.value, *str_name);
+            }
+        }
+    },
+    { .keywords = { "disassemble", "disas" }, .description = "disassemble symbol",
+        .callback = [](Tracee& tracee,  std::string_view line) {
+            auto symbol_name = utils::nth_arg(line, 1);
+            if (!symbol_name) {
+                std::cout << "No symbol name provided! format: disassemble [SYMBOL]\n";
+                return;
+            }
+
+            disas::disas_function(tracee.elf, symbol_name.value());
         }
     },
 };

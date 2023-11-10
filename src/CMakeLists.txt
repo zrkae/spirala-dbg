@@ -10,6 +10,7 @@ set(SOURCES
     main.cc
     repl.cc
     tracee.cc
+    disassembly.cc
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})
@@ -17,4 +18,5 @@ add_executable(${PROJECT_NAME} ${SOURCES})
 target_link_libraries(${PROJECT_NAME}
     linenoise
     zep
+    capstone
 )

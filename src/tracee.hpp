@@ -15,9 +15,13 @@
 
 #include "../zep/src/zep.hpp"
 
-struct Foo {
-    elf::Elf e;
-};
+namespace addr {
+
+// convert between virtual address of the running tracee and the offset in the on-disk elf file
+uint64_t vaddr_to_fileoffset(void *addr);
+void *fileoffset_to_vaddr(uint64_t offset);
+
+}
 
 namespace reg {
 
