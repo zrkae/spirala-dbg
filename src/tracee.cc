@@ -135,7 +135,7 @@ user_regs_struct Tracee::regs()
     return regs_struct;
 }
 
-uint64_t Tracee::get_reg(reg::Register reg)
+uint64_t Tracee::get_reg(reg::Register reg) const
 {
     uint64_t offset = reg::to_offset(reg);
 
@@ -197,7 +197,11 @@ const Tracee::BreakPointMap_t& Tracee::breakpoints()
 void Tracee::breakpoint_add(intptr_t address)
 {
     m_breakpoints.insert_or_assign(address, BreakPoint {address, this});
-    std::cout << std::format("Added breakpoint at 0x{:x}.\n", address);
+}
+
+void Tracee::breakpoint_clear()
+{
+    m_breakpoints.clear();
 }
 
 void BreakPoint::enable()

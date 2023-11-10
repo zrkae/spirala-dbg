@@ -5,7 +5,7 @@
 
 namespace disas {
 
-void disas_print(void *file_addr, size_t size, uint64_t offset)
+void disas_print(const Tracee& tracee, void *file_addr, size_t size, uint64_t offset)
 {
     csh handle;
     cs_insn *insn;
@@ -14,11 +14,16 @@ void disas_print(void *file_addr, size_t size, uint64_t offset)
     if (cs_open(CS_ARCH_X86, CS_MODE_64, &handle) != CS_ERR_OK)
         return;
 
+    uint64_t curr_rip = tracee.is_running() ? tracee.get_reg(reg::Register::rip) : 0;
+
     count = cs_disasm(handle, (uint8_t*)file_addr, size, offset, 0, &insn);
     if (count > 0) {
         size_t j;
-        for (j = 0; j < count; j++)
-            std::cout << std::format("{:x}  {} {}\n", insn[j].address, insn[j].mnemonic, insn[j].op_str);
+        for (j = 0; j < count; j++) {
+            std::cout << std::format("\t{:x}  {} {}\n", insn[j].address, insn[j].mnemonic, insn[j].op_str);
+            if (j != count-1 && insn[j].address == curr_rip-1)
+                std::cout << " ==>";
+        }
         cs_free(insn, count);
     } else {
         std::cout << "Couldn't dissassemble code!\n";
@@ -27,11 +32,11 @@ void disas_print(void *file_addr, size_t size, uint64_t offset)
     cs_close(&handle);
 }
 
-void disas_function(const elf::Elf& elf, std::string_view name)
+void disas_function(const Tracee& tracee, std::string_view name)
 {
-    auto symbols = elf.symbols();
-    auto it = std::find_if(symbols.begin(), symbols.end(), [&elf, &name](const auto& symbol){
-        return symbol.str_name(elf) == name;
+    auto symbols = tracee.elf.symbols();
+    auto it = std::find_if(symbols.begin(), symbols.end(), [&tracee, &name](const auto& symbol){
+        return symbol.str_name(tracee.elf) == name;
     });
 
     if (it == symbols.end()) {
@@ -39,7 +44,7 @@ void disas_function(const elf::Elf& elf, std::string_view name)
         return;
     }
 
-    disas_print(elf.vaddr_to_fileptr((void*)it->value), it->size, it->value);
+    disas_print(tracee, tracee.elf.vaddr_to_fileptr((void*)it->value), it->size, it->value);
 }
 
 } // namespace disas

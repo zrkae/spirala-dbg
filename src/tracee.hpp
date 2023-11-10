@@ -86,6 +86,8 @@ private:
     using BreakPointMap_t = std::unordered_map<intptr_t, BreakPoint>;
 public:
     Tracee() = delete;
+    Tracee(const Tracee&) = delete;
+
     Tracee(const std::string& path);
 
     void spawn();
@@ -93,13 +95,14 @@ public:
     void cont();
 
     user_regs_struct regs();
-    uint64_t get_reg(reg::Register reg);
+    uint64_t get_reg(reg::Register reg) const;
     void set_reg(reg::Register reg, uint64_t value);
 
     bool is_running() const;
     pid_t pid() const;
 
     const BreakPointMap_t& breakpoints();
+    void breakpoint_clear();
     void breakpoint_add(intptr_t addr);
 
     elf::Elf elf;

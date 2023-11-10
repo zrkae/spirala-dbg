@@ -90,7 +90,17 @@ struct Command {
 };
 
 const std::vector<Command> CommandTable = {
-    { .keywords = { "help", "h" }, .description = "show this menu" }, // doesn't need a function, this is just so it shows up
+    { .keywords = { "help", "h", "?" }, .description = "show this menu",
+        .callback = [](Tracee&, std::string_view) {
+            // TODO: nice formatting
+            std::cout << "Available commands:\n";
+            for (const auto &cmd : CommandTable) {
+                for (const auto &kw : cmd.keywords)
+                std::cout << kw << " ";
+                std::cout << "  " << cmd.description << "\n";
+            }
+        }
+    }, // doesn't need a function, this is just so it shows up
     { .keywords = { "exit" }, .description = "exit the debugger",
         .callback = [](Tracee&, std::string_view) {
             repl::run = false;
@@ -200,20 +210,38 @@ const std::vector<Command> CommandTable = {
     },
     { .keywords = { "break", "b" }, .description = "break at specified address",
         .callback = [](Tracee& tracee,  std::string_view line) {
-            auto arg_address = utils::nth_arg(line, 1);
-            if (!arg_address.has_value()) {
-                std::cout << "No address supplied. Usage: break [ADDRESS IN HEX]\n";
+            auto arg_target = utils::nth_arg(line, 1);
+            if (!arg_target.has_value()) {
+                std::cout << "No address supplied. Usage: break [FUNCTION/0x(ADDRESS IN HEX)]\n";
                 return;
             }
 
+            if (arg_target->starts_with("0x")) {
+                arg_target->remove_prefix(2);
+            } else {
+                auto symbols = tracee.elf.symbols();
+                auto it = std::find_if(symbols.begin(), symbols.end(), 
+                                       [&arg_target, &tracee](elf::Symbol& sym) { return sym.str_name(tracee.elf) == arg_target; });
+
+                if (it != symbols.end()) {
+                    // symbol found
+                    tracee.breakpoint_add(it->value);
+                    std::cout << std::format("Added breakpoint at '{}' = 0x{:x}.\n", *it->str_name(tracee.elf), it->value);
+                    return;
+                }
+
+                // symbol not found, try to interpret as address
+            }
+
             intptr_t addr;
-            auto result = std::from_chars(arg_address->data(), arg_address->data() + arg_address->size(), 
+            auto result = std::from_chars(arg_target->data(), arg_target->data() + arg_target->size(), 
                                           addr, 16);
             if (result.ec == std::errc::invalid_argument) {
-                std::cout << "Invalid address supplied.\n";
+                std::cout << std::format("'{}' is neither a valid function name nor a valid address.\n", arg_target.value());
                 return;
             }
             tracee.breakpoint_add(addr);
+            std::cout << std::format("Added breakpoint at 0x{:x}.\n", addr);
         }
     },
     { .keywords = { "breaklist", "bl" }, .description = "show currently set breakpoints",
@@ -227,8 +255,19 @@ const std::vector<Command> CommandTable = {
             int i = 0;
             for (const auto& [addr, bp] : tracee.breakpoints())  {
                 i++;
-                std::cout << std::format("[{}] address: {}, enabled: {}\n", i, addr, bp.enabled());
+                std::cout << std::format("[{}] address: 0x{}, enabled: {}\n", i, addr, bp.enabled());
             }
+        }
+    },
+    { .keywords = { "breakclear", "bc" }, .description = "show currently set breakpoints",
+        .callback = [](Tracee& tracee,  std::string_view) {
+            if (tracee.breakpoints().empty()) {
+                std::cout << "No breakpoints set.\n";
+                return;
+            }
+
+            tracee.breakpoint_clear();
+            std::cout << "Cleared all breakpoints\n";
         }
     },
     { .keywords = { "symbols", "sym" }, .description = "show symbols present in the executable (globals, functions)",
@@ -259,7 +298,7 @@ const std::vector<Command> CommandTable = {
                 return;
             }
 
-            disas::disas_function(tracee.elf, symbol_name.value());
+            disas::disas_function(tracee, symbol_name.value());
         }
     },
 };
@@ -271,18 +310,6 @@ static void handle_command(Tracee& tracee, std::string_view line)
         return;
 
     std::string_view keyword = utils::nth_arg(line, 0).value();
-
-    // TODO: nice formatting
-    if (keyword == "help" || keyword == "h") {
-        std::cout << "Available commands:\n";
-        for (const auto &cmd : CommandTable) {
-            for (const auto &kw : cmd.keywords)
-                std::cout << kw << " ";
-            std::cout << "  " << cmd.description << "\n";
-        }
-        return;
-    }
-
     auto it = std::find_if(CommandTable.begin(), CommandTable.end(), 
                            [&](const Command& e) { return e.keywords.contains(keyword); });
     if (it == CommandTable.end()) {
@@ -300,7 +327,7 @@ void start(Tracee& tracee)
     run = true;
 
     while (run)  {
-        line = linenoise("[bugr] $ ");
+        line = linenoise("[sprl] $ ");
         if (!line)
             continue;
         linenoiseHistoryAdd(line);
