@@ -34,7 +34,7 @@ void disas_print(const Tracee& tracee, void *file_addr, size_t size, uint64_t of
 
 void disas_function(const Tracee& tracee, std::string_view name)
 {
-    auto symbols = tracee.elf.symbols();
+    auto symbols = tracee.elf.symbols;
     auto it = std::find_if(symbols.begin(), symbols.end(), [&tracee, &name](const auto& symbol){
         return symbol.str_name(tracee.elf) == name;
     });

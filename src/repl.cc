@@ -219,7 +219,7 @@ const std::vector<Command> CommandTable = {
             if (arg_target->starts_with("0x")) {
                 arg_target->remove_prefix(2);
             } else {
-                auto symbols = tracee.elf.symbols();
+                auto symbols = tracee.elf.symbols;
                 auto it = std::find_if(symbols.begin(), symbols.end(), 
                                        [&arg_target, &tracee](elf::Symbol& sym) { return sym.str_name(tracee.elf) == arg_target; });
 
@@ -272,7 +272,7 @@ const std::vector<Command> CommandTable = {
     },
     { .keywords = { "symbols", "sym" }, .description = "show symbols present in the executable (globals, functions)",
         .callback = [](Tracee& tracee,  std::string_view) {
-            for (const auto& sym : tracee.elf.symbols()) {
+            for (const auto& sym : tracee.elf.symbols) {
                 auto str_name = sym.str_name(tracee.elf);
                 if (str_name && !str_name.value().empty())
                     std::cout << std::format("{:x}\t{}\n", sym.value, *str_name);
@@ -281,7 +281,7 @@ const std::vector<Command> CommandTable = {
     },
     { .keywords = { "functions", "func" }, .description = "show exported function symbols",
         .callback = [](Tracee& tracee,  std::string_view) {
-            for (const auto& sym : tracee.elf.symbols()) {
+            for (const auto& sym : tracee.elf.symbols) {
                 if (sym.type() != elf::SymbolType::STT_FUNC)
                     continue;
                 auto str_name = sym.str_name(tracee.elf);
