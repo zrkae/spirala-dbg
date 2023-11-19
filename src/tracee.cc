@@ -80,8 +80,21 @@ void Tracee::spawn()
         throw std::runtime_error(std::format("Failed to set PTRACE_O_EXITKILL: {}", strerror(errno)));
     }
 
+    if (elf.is_pie()) {
+        std::ifstream maps_file(std::format("/proc/{}/maps", frk));
+        std::streambuf *rbuff = maps_file.rdbuf();
+
+        char buff[16];
+        rbuff->sgetn(buff, sizeof(buff));
+        buff[sizeof(buff) - 1] = 0;
+
+        auto result = std::from_chars(buff, buff + sizeof(buff), m_base_addr, 16);
+        if (result.ec == std::errc::invalid_argument)
+            throw std::runtime_error("failed to retrieve base address.");
+    }
+
     for (auto& [_, bp] : m_breakpoints)
-        bp.enable();
+        bp.reset();
 
     std::cout << std::format("[{}] Process spawned.\n", m_pid);
 }
@@ -93,7 +106,7 @@ void Tracee::kill()
     // kinda awkward, maybe I'll change the function name later
     if (::kill(m_pid, SIGKILL) < 0)
         throw std::runtime_error(std::format("Failed to kill: {}", strerror(errno)));
-    std::cout << std::format("[{}]: killed", m_pid);
+    std::cout << std::format("[{}]: killed\n", m_pid);
 
     cleanup();
 }
@@ -107,7 +120,7 @@ void Tracee::cont()
     bool at_breakpoint = m_breakpoints.contains(user_regs.rip);
     
     if (at_breakpoint) {
-        m_breakpoints.at(user_regs.rip).disable();
+        m_breakpoints.at(user_regs.rip).unset();
         if (ptrace(PTRACE_SETREGS, m_pid, nullptr, &user_regs) < 0)
             throw std::runtime_error(std::format("Failed to SETREGS: {}", strerror(errno)));
     }
@@ -118,7 +131,7 @@ void Tracee::cont()
     // re-enable after we step over it
     if (at_breakpoint) {
         try { // this might fail due to tracee process exiting before us reaching this point.
-            m_breakpoints.at(user_regs.rip).enable();
+            m_breakpoints.at(user_regs.rip).set();
         } catch (std::exception& e) {
             // nop
         }
@@ -167,6 +180,11 @@ pid_t Tracee::pid() const
     return m_pid;
 }
 
+uint64_t Tracee::base_addr() const
+{
+    return m_base_addr;
+}
+
 void Tracee::waitsig() 
 {
     waitpid(m_pid, &m_wstatus, 0);
@@ -184,6 +202,10 @@ void Tracee::cleanup()
 {
     // m_breakpoints.clear();
     m_pid = 0;
+    m_base_addr = 0;
+
+    for (auto& [_, bp] : m_breakpoints)
+        bp.m_set = false;
 }
 
 // -----------
@@ -204,42 +226,47 @@ void Tracee::breakpoint_clear()
     m_breakpoints.clear();
 }
 
-void BreakPoint::enable()
+void BreakPoint::reset()
 {
     if (m_enabled)
+        set();
+}
+
+void BreakPoint::set()
+{
+    if (m_set)
         return;
 
-    long data = ptrace(PTRACE_PEEKDATA, m_tracee->pid(), m_addr, nullptr);
+    uint64_t vaddr = m_addr + m_tracee->base_addr();
+
+    long data = ptrace(PTRACE_PEEKDATA, m_tracee->pid(), vaddr, nullptr);
     if (data == -1)
         throw std::runtime_error(std::format("Failed to PTRACE_PEEKDATA: {}", strerror(errno)));
 
     m_saved = data & 0xFF;
 
     data = (data & ~0xFF) | BreakPoint::INT3;
-    if (ptrace(PTRACE_POKEDATA, m_tracee->pid(), m_addr, data) == -1)
+    if (ptrace(PTRACE_POKEDATA, m_tracee->pid(), vaddr, data) == -1)
         throw std::runtime_error(std::format("Failed to PTRACE_POKEDATA: {}", strerror(errno)));
 
-    m_enabled = true;
+    m_set = true;
 }
 
-void BreakPoint::disable()
+void BreakPoint::unset()
 {
-    if (!m_enabled)
+    if (!m_set)
         return;
 
-    long data = ptrace(PTRACE_PEEKDATA, m_tracee->pid(), m_addr, nullptr);
+    uint64_t vaddr = m_addr + m_tracee->base_addr();
+
+    long data = ptrace(PTRACE_PEEKDATA, m_tracee->pid(), vaddr, nullptr);
     if (data == -1)
         throw std::runtime_error(std::format("Failed to PTRACE_PEEKDATA: {}", strerror(errno)));
 
     data = (data & ~0xFF) | m_saved;
 
-    if (ptrace(PTRACE_POKEDATA, m_tracee->pid(), m_addr, data) == -1)
+    if (ptrace(PTRACE_POKEDATA, m_tracee->pid(), vaddr, data) == -1)
         throw std::runtime_error(std::format("Failed to PTRACE_POKEDATA: {}", strerror(errno)));
 
-    m_enabled = false;
-}
-
-bool BreakPoint::enabled() const
-{
-    return m_enabled;
+    m_set = false;
 }

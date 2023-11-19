@@ -9,7 +9,7 @@ spirala is a linux user space program debugger. It works with the ELF file forma
 
 ### Get started
 #### dependencies
-- Required external libraries: `capstone`
+- Required external libraries: `capstone` `libunwind`
 - A c++20 compliant compiler
 - The rest of dependencies are provided in the tree itself.
 

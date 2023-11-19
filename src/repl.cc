@@ -5,11 +5,13 @@
 #include <set>
 #include <algorithm>
 #include <vector>
+#include <sstream>
 
 #include <linenoise.h>
 #include <sys/user.h>
 
 #include "disassembly.hpp"
+#include "backtrace.hpp"
 
 namespace repl {
 
@@ -95,9 +97,10 @@ const std::vector<Command> CommandTable = {
             // TODO: nice formatting
             std::cout << "Available commands:\n";
             for (const auto &cmd : CommandTable) {
+            std::stringstream keywords;
                 for (const auto &kw : cmd.keywords)
-                std::cout << kw << " ";
-                std::cout << "  " << cmd.description << "\n";
+                    keywords << kw << " ";
+                std::cout << std::format("{:<20} {}\n", keywords.str(), cmd.description);
             }
         }
     }, // doesn't need a function, this is just so it shows up
@@ -231,14 +234,23 @@ const std::vector<Command> CommandTable = {
                 }
 
                 // symbol not found, try to interpret as address
+                // TODO: check if PIE and if so break on future shared library?
             }
 
             intptr_t addr;
             auto result = std::from_chars(arg_target->data(), arg_target->data() + arg_target->size(), 
                                           addr, 16);
             if (result.ec == std::errc::invalid_argument) {
-                std::cout << std::format("'{}' is neither a valid function name nor a valid address.\n", arg_target.value());
-                return;
+                if (arg_target.value() == "_start") {
+                    if (ask_confirmation("No '_start' symbol present, would you want to break at the entry point? [Y/N]: ")) {
+                        addr = tracee.elf.header->entry;
+                    } else {
+                        return;
+                    }
+                } else {
+                    std::cout << std::format("'{}' is neither a valid function name nor a valid address.\n", arg_target.value());
+                    return;
+                }
             }
             tracee.breakpoint_add(addr);
             std::cout << std::format("Added breakpoint at 0x{:x}.\n", addr);
@@ -255,11 +267,14 @@ const std::vector<Command> CommandTable = {
             int i = 0;
             for (const auto& [addr, bp] : tracee.breakpoints())  {
                 i++;
-                std::cout << std::format("[{}] address: 0x{}, enabled: {}\n", i, addr, bp.enabled());
+                std::cout << std::format("[{}] address: 0x{:x}", i, addr);
+                if (tracee.elf.is_pie() && tracee.is_running())
+                    std::cout << std::format(" (0x{:x})", addr + tracee.base_addr());
+                std::cout << std::format(", enabled: {}\n", bp.enabled());
             }
         }
     },
-    { .keywords = { "breakclear", "bc" }, .description = "show currently set breakpoints",
+    { .keywords = { "breakclear", "bc" }, .description = "clear currently set breakpoints",
         .callback = [](Tracee& tracee,  std::string_view) {
             if (tracee.breakpoints().empty()) {
                 std::cout << "No breakpoints set.\n";
@@ -272,6 +287,11 @@ const std::vector<Command> CommandTable = {
     },
     { .keywords = { "symbols", "sym" }, .description = "show symbols present in the executable (globals, functions)",
         .callback = [](Tracee& tracee,  std::string_view) {
+            if (!tracee.elf.has_symbols()) {
+                std::cout << "No symbols present in the binary.\n";
+                return;
+            }
+
             for (const auto& sym : tracee.elf.symbols) {
                 auto str_name = sym.str_name(tracee.elf);
                 if (str_name && !str_name.value().empty())
@@ -281,6 +301,11 @@ const std::vector<Command> CommandTable = {
     },
     { .keywords = { "functions", "func" }, .description = "show exported function symbols",
         .callback = [](Tracee& tracee,  std::string_view) {
+            if (!tracee.elf.has_symbols()) {
+                std::cout << "No symbols present in the binary (thus unable to locate functions).\n";
+                return;
+            }
+
             for (const auto& sym : tracee.elf.symbols) {
                 if (sym.type() != elf::SymbolType::STT_FUNC)
                     continue;
@@ -301,6 +326,16 @@ const std::vector<Command> CommandTable = {
             disas::disas_function(tracee, symbol_name.value());
         }
     },
+    { .keywords = { "backtrace", "bt" }, .description = "display backtrace of the stack",
+        .callback = [](Tracee& tracee,  std::string_view) {
+            if (!tracee.is_running()) {
+                std::cout << "No process is currently running, cannot display backtrace.\n";
+                return;
+            }
+
+            bt::print_backtrace(tracee);
+        }
+    },
 };
 
 // interpret user command
@@ -312,6 +347,7 @@ static void handle_command(Tracee& tracee, std::string_view line)
     std::string_view keyword = utils::nth_arg(line, 0).value();
     auto it = std::find_if(CommandTable.begin(), CommandTable.end(), 
                            [&](const Command& e) { return e.keywords.contains(keyword); });
+
     if (it == CommandTable.end()) {
         std::cout << std::format("Unknown keyword '{}'. Maybe try 'help'?\n", keyword);
         return;

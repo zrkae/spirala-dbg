@@ -44,7 +44,7 @@ void disas_function(const Tracee& tracee, std::string_view name)
         return;
     }
 
-    disas_print(tracee, tracee.elf.vaddr_to_fileptr((void*)it->value), it->size, it->value);
+    disas_print(tracee, tracee.elf.vaddr_to_fileptr((void*)it->value), it->size, it->value + tracee.base_addr());
 }
 
 } // namespace disas

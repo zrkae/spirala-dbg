@@ -70,15 +70,21 @@ public:
     BreakPoint(intptr_t addr, const Tracee* tracee)
     : m_tracee(tracee), m_addr(addr) {}
     
-    void enable();
-    void disable();
+    void reset();
+    void enable() { m_enabled = true; }
+    void disable() { m_enabled = false; }
+    bool enabled() const { return m_enabled; };
 
-    bool enabled() const;
+    friend class Tracee;
 private:
     const Tracee *m_tracee;
     intptr_t m_addr;
-    bool m_enabled;
+    bool m_enabled { true };
+    bool m_set { false };
     uint64_t m_saved {}; // previous instruction that was replaced by the breakpoint
+    
+    void set();
+    void unset();
 };
 
 class Tracee {
@@ -100,6 +106,7 @@ public:
 
     bool is_running() const;
     pid_t pid() const;
+    uint64_t base_addr() const;
 
     const BreakPointMap_t& breakpoints();
     void breakpoint_clear();
@@ -115,4 +122,5 @@ private:
     pid_t m_pid = 0;
     int m_wstatus;
     BreakPointMap_t m_breakpoints;
+    uint64_t m_base_addr = 0;
 };
