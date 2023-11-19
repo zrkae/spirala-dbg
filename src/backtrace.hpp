@@ -4,6 +4,6 @@
 // backtrace
 namespace bt {
     
-void print_backtrace(const Tracee& tracee);
+void backtrace_print(const Tracee& tracee);
 
 }; // namespace bt

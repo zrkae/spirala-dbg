@@ -333,7 +333,7 @@ const std::vector<Command> CommandTable = {
                 return;
             }
 
-            bt::print_backtrace(tracee);
+            bt::backtrace_print(tracee);
         }
     },
 };

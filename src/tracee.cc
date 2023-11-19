@@ -10,6 +10,8 @@
 
 #include "../zep/src/zep.hpp"
 
+constexpr int WORD_SIZE = 8;
+
 namespace reg {
 
 uint64_t to_offset(Register reg)
@@ -117,10 +119,20 @@ void Tracee::cont()
     if (WIFSTOPPED(m_wstatus))
         user_regs.rip--;
 
-    bool at_breakpoint = m_breakpoints.contains(user_regs.rip);
+    uint64_t file_addr = user_regs.rip;
+
+    if (elf.is_pie()) {
+        // breakpoints are set on the address found for the symbol in the elf file on disk,
+        // here we are getting the virtual address that the kernel has mapped us at because 
+        // this is a position independent executable. (thankfully no ASLR because we disable it,
+        // so section layout is still fine) Thus we need to offset it by the base address of our mapping :)
+        file_addr -= m_base_addr;
+    }
+
+    bool at_breakpoint = m_breakpoints.contains(file_addr);
     
     if (at_breakpoint) {
-        m_breakpoints.at(user_regs.rip).unset();
+        m_breakpoints.at(file_addr).unset();
         if (ptrace(PTRACE_SETREGS, m_pid, nullptr, &user_regs) < 0)
             throw std::runtime_error(std::format("Failed to SETREGS: {}", strerror(errno)));
     }
@@ -131,7 +143,7 @@ void Tracee::cont()
     // re-enable after we step over it
     if (at_breakpoint) {
         try { // this might fail due to tracee process exiting before us reaching this point.
-            m_breakpoints.at(user_regs.rip).set();
+            m_breakpoints.at(file_addr).set();
         } catch (std::exception& e) {
             // nop
         }
@@ -238,14 +250,19 @@ void BreakPoint::set()
         return;
 
     uint64_t vaddr = m_addr + m_tracee->base_addr();
+    
+    // ptrace returns _word aligned_ data, so we just move it to the lower boundary and adjust the mask
+    int mod = vaddr % WORD_SIZE;
+    vaddr -= mod;
+    uint64_t mask = 0xffUL << mod*8;
 
     long data = ptrace(PTRACE_PEEKDATA, m_tracee->pid(), vaddr, nullptr);
     if (data == -1)
         throw std::runtime_error(std::format("Failed to PTRACE_PEEKDATA: {}", strerror(errno)));
 
-    m_saved = data & 0xFF;
+    m_saved = data & mask;
 
-    data = (data & ~0xFF) | BreakPoint::INT3;
+    data = (data & ~mask) | (BreakPoint::INT3 << mod*8);
     if (ptrace(PTRACE_POKEDATA, m_tracee->pid(), vaddr, data) == -1)
         throw std::runtime_error(std::format("Failed to PTRACE_POKEDATA: {}", strerror(errno)));
 
@@ -257,13 +274,17 @@ void BreakPoint::unset()
     if (!m_set)
         return;
 
+    // ptrace returns _word aligned_ data, so we just move it to the lower boundary and adjust the mask
     uint64_t vaddr = m_addr + m_tracee->base_addr();
+    int mod = vaddr % WORD_SIZE;
+    vaddr -= mod;
+    uint64_t mask = 0xffUL << mod*8;
 
     long data = ptrace(PTRACE_PEEKDATA, m_tracee->pid(), vaddr, nullptr);
     if (data == -1)
         throw std::runtime_error(std::format("Failed to PTRACE_PEEKDATA: {}", strerror(errno)));
 
-    data = (data & ~0xFF) | m_saved;
+    data = (data & ~mask) | m_saved;
 
     if (ptrace(PTRACE_POKEDATA, m_tracee->pid(), vaddr, data) == -1)
         throw std::runtime_error(std::format("Failed to PTRACE_POKEDATA: {}", strerror(errno)));

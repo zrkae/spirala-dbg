@@ -20,9 +20,9 @@ void disas_print(const Tracee& tracee, void *file_addr, size_t size, uint64_t of
     if (count > 0) {
         size_t j;
         for (j = 0; j < count; j++) {
-            std::cout << std::format("\t{:x}  {} {}\n", insn[j].address, insn[j].mnemonic, insn[j].op_str);
             if (j != count-1 && insn[j].address == curr_rip-1)
                 std::cout << " ==>";
+            std::cout << std::format("\t{:x}  {} {}\n", insn[j].address, insn[j].mnemonic, insn[j].op_str);
         }
         cs_free(insn, count);
     } else {

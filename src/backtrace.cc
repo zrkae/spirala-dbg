@@ -5,7 +5,7 @@ namespace bt {
     
 // not a huge fan of using libunwind to do all the hard work. 
 // might replace with a custom implementation one day.
-void print_backtrace(const Tracee& tracee)
+void backtrace_print(const Tracee& tracee)
 {
     // create a libunwind addr space with ptrace accessor functions
     unw_addr_space_t unw_as = unw_create_addr_space(&_UPT_accessors, 0);
