@@ -19,7 +19,7 @@ int main(int argc, char **argv)
     }
     setup();
 
-    Tracee dbg = { argv[1] };
+    Tracee dbg { argv[1] };
     repl::start(dbg);
 
     return 0;

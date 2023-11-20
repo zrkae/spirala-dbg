@@ -8,8 +8,6 @@
 #include <sys/wait.h>
 #include <sys/personality.h>
 
-#include "../zep/src/zep.hpp"
-
 constexpr int WORD_SIZE = 8;
 
 namespace reg {
@@ -144,7 +142,7 @@ void Tracee::cont()
     if (at_breakpoint) {
         try { // this might fail due to tracee process exiting before us reaching this point.
             m_breakpoints.at(file_addr).set();
-        } catch (std::exception& e) {
+        } catch (const std::exception&) {
             // nop
         }
     }

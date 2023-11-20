@@ -16,7 +16,7 @@ void disas_print(const Tracee& tracee, void *file_addr, size_t size, uint64_t of
 
     uint64_t curr_rip = tracee.is_running() ? tracee.get_reg(reg::Register::rip) : 0;
 
-    count = cs_disasm(handle, (uint8_t*)file_addr, size, offset, 0, &insn);
+    count = cs_disasm(handle, static_cast<uint8_t*>(file_addr), size, offset, 0, &insn);
     if (count > 0) {
         size_t j;
         for (j = 0; j < count; j++) {
@@ -44,7 +44,7 @@ void disas_function(const Tracee& tracee, std::string_view name)
         return;
     }
 
-    disas_print(tracee, tracee.elf.vaddr_to_fileptr((void*)it->value), it->size, it->value + tracee.base_addr());
+    disas_print(tracee, tracee.elf.vaddr_to_fileptr(reinterpret_cast<void*>(it->value)), it->size, it->value + tracee.base_addr());
 }
 
 } // namespace disas

@@ -39,26 +39,19 @@ static bool run;
 
 bool ask_confirmation(const char *msg = "Are you sure? [Y/N]: ")
 {
-    char *ans_ptr = nullptr;
-    bool ret;
-
     for (;;) {
         char *ans_ptr = linenoise(msg);
         if (!ans_ptr)
             continue;
         std::string_view ans { ans_ptr };
         if (ans.starts_with('Y') || ans.starts_with('y')) {
-            ret = true;
-            break;
+            linenoiseFree(ans_ptr);
+            return true;
         } else if (ans.starts_with('N') || ans.starts_with('n')) {
-            ret = false;
-            break;
+            linenoiseFree(ans_ptr);
+            return false;
         }
-        linenoiseFree(ans_ptr);
     }
-
-    linenoiseFree(ans_ptr);
-    return ret;
 }
 
 std::ostream& operator<<(std::ostream& stream, const user_regs_struct& regs)
@@ -358,12 +351,11 @@ static void handle_command(Tracee& tracee, std::string_view line)
 // start a read-eval-print loop attached to the given tracee
 void start(Tracee& tracee) 
 {
-    char *line;
     linenoiseHistorySetMaxLen(32);
     run = true;
 
     while (run)  {
-        line = linenoise("[sprl] $ ");
+        char *line = linenoise("[sprl] $ ");
         if (!line)
             continue;
         linenoiseHistoryAdd(line);

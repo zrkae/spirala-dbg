@@ -13,7 +13,7 @@
 #include <sys/user.h>
 #include <unordered_map>
 
-#include "../zep/src/zep.hpp"
+#include <zep.hpp>
 
 namespace addr {
 
@@ -94,7 +94,7 @@ public:
     Tracee() = delete;
     Tracee(const Tracee&) = delete;
 
-    Tracee(const std::string& path);
+    explicit Tracee(const std::string& path);
 
     void spawn();
     void kill();
@@ -104,9 +104,9 @@ public:
     uint64_t get_reg(reg::Register reg) const;
     void set_reg(reg::Register reg, uint64_t value);
 
-    bool is_running() const;
-    pid_t pid() const;
-    uint64_t base_addr() const;
+    [[nodiscard]] bool is_running() const;
+    [[nodiscard]] pid_t pid() const;
+    [[nodiscard]] uint64_t base_addr() const;
 
     const BreakPointMap_t& breakpoints();
     void breakpoint_clear();
@@ -120,7 +120,7 @@ private:
     std::string m_path;
 
     pid_t m_pid = 0;
-    int m_wstatus;
+    int m_wstatus = 0;
     BreakPointMap_t m_breakpoints;
     uint64_t m_base_addr = 0;
 };

@@ -11,3 +11,6 @@ foreach name : subproj_names
 endforeach
 
 subdir('src')
+
+run_target('check',
+  command : 'tests/scripts/check.sh')
